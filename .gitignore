@@ -1,0 +1,40 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Blueprints and Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven build directory
+target/
+work/
+
+# STS / Eclipse metadata files
+.mtj.tmp/
+.metadata/
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+
+# IntelliJ IDEA workspace files
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Operating System junk files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
