@@ -1,13 +1,12 @@
 package com.sf.notification_service.services;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 @Service
-@Slf4j
 public class NotificationService {
 
+	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationService.class);
     @KafkaListener(topics = "order-topic", groupId = "notification-group")
     public void consumeOrderEvent(String message) {
         log.info("[NOTIFICATION SERVICE] Asynchronous Event Received successfully!");

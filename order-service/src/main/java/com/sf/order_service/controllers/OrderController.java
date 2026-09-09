@@ -11,12 +11,19 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/orders")
-@RequiredArgsConstructor
+
 public class OrderController {
 
     private final OrderService orderService;
 
-    @PostMapping
+    
+    public OrderController(OrderService orderService) {
+		super();
+		this.orderService = orderService;
+	}
+
+
+	@PostMapping
     public ResponseEntity<String> placeOrder(@Valid @RequestBody OrderRequest orderRequest) {
         String confirmationMessage = orderService.placeOrder(orderRequest);
         return new ResponseEntity<>(confirmationMessage, HttpStatus.CREATED);

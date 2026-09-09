@@ -9,13 +9,16 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
     
-    @PostMapping("/register")
+    public AuthController(AuthService authService) {
+		super();
+		this.authService = authService;
+	}
+
+	@PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody UserCredentials user) {
         return ResponseEntity.ok(authService.registerUser(user));
     }

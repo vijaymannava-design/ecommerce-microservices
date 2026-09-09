@@ -83,6 +83,13 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			
+			<!-- Exposes Spring Boot Actuator metrics in a format Prometheus understands -->
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+
 		</dependencies>
 	</dependencyManagement>
 

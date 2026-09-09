@@ -22,12 +22,17 @@ import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/products")
-@RequiredArgsConstructor
 public class ProductController {
 
     private final ProductService productService;
 
-    @PostMapping
+    
+    public ProductController(ProductService productService) {
+		super();
+		this.productService = productService;
+	}
+
+	@PostMapping
     public ResponseEntity<Product> createProduct(@Valid @RequestBody ProductRequest request) {
         return new ResponseEntity<>(productService.createProduct(request), HttpStatus.CREATED);
     }

@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClient.Builder;
 
 import com.sf.order_service.dto.InventoryResponse;
 import com.sf.order_service.dto.OrderRequest;
@@ -12,51 +13,127 @@ import com.sf.order_service.entities.Order;
 import com.sf.order_service.exceptions.OutOfStockException;
 import com.sf.order_service.repo.OrderRepository;
 
-import lombok.RequiredArgsConstructor;
+
+
+// before adding circuit breaker
+/*
+ * @Service
+ * 
+ * @RequiredArgsConstructor //@Slf4j public class OrderService {
+ * 
+ * // Add this injection property inside your OrderService class block: private
+ * final org.springframework.kafka.core.KafkaTemplate<String, String>
+ * kafkaTemplate;
+ * 
+ * private final OrderRepository orderRepository; private final
+ * WebClient.Builder webClientBuilder; private static final org.slf4j.Logger log
+ * = org.slf4j.LoggerFactory.getLogger(OrderService.class);
+ * 
+ * @Transactional public String placeOrder(OrderRequest orderRequest) {
+ * log.info("[ORDER SERVICE] Initiating transaction sequence for item SKU: {}",
+ * orderRequest.getSkuCode());
+ * 
+ * 
+ * // Inter-Service Communication Block: Synchronously questioning inventory
+ * status InventoryResponse inventoryResponse = webClientBuilder.build().get()
+ * .uri("http://INVENTORY-SERVICE/api/inventory/" + orderRequest.getSkuCode())
+ * .retrieve() .bodyToMono(InventoryResponse.class) // Convert incoming JSON to
+ * clean Java DTO .block(); // Forces synchronous execution (waiting for
+ * response)
+ * 
+ * // Logical Validation Evaluation if (inventoryResponse != null &&
+ * inventoryResponse.isInStock() && inventoryResponse.getAvailableQuantity() >=
+ * orderRequest.getQuantity()) {
+ * 
+ * Order order = Order.builder() .orderNumber(UUID.randomUUID().toString())
+ * .skuCode(orderRequest.getSkuCode()) .price(orderRequest.getPrice())
+ * .quantity(orderRequest.getQuantity()) .build(); // Right inside your
+ * placeOrder() method, inside the success "if" block, add this call:
+ * kafkaTemplate.send("order-topic", order.getOrderNumber()); log.
+ * info("[ORDER SERVICE] Asynchronous registration event stream transmitted to Kafka topic."
+ * ); orderRepository.save(order);
+ * log.info("[ORDER SERVICE] Transaction success! Assigned reference token: {}",
+ * order.getOrderNumber()); return
+ * "Order placed successfully. Reference number: " + order.getOrderNumber();
+ * 
+ * } else { log.
+ * error("[ORDER SERVICE] Purchase failed. Insufficient stock capacity verified for SKU: {}"
+ * , orderRequest.getSkuCode()); throw new
+ * OutOfStockException("Requested item stock unavailable or quantity selection exceeds warehouse availability."
+ * ); } }
+ * 
+ * }
+ */
+
+// After adding circuit breaker
+
+import com.sf.order_service.dto.InventoryResponse;
+import com.sf.order_service.dto.OrderRequest;
+import com.sf.order_service.entities.Order;
+import com.sf.order_service.exceptions.OutOfStockException;
+import com.sf.order_service.repo.OrderRepository;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
+import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
-//@Slf4j
 public class OrderService {
 
-	// Add this injection property inside your OrderService class block:
-    private final  org.springframework.kafka.core.KafkaTemplate<String, String> kafkaTemplate;
-    
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientBuilder;
+    private final KafkaTemplate<String, String> kafkaTemplate;
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrderService.class);
-    @Transactional
+    
+    public OrderService(OrderRepository orderRepository, Builder webClientBuilder,
+			KafkaTemplate<String, String> kafkaTemplate) {
+		super();
+		this.orderRepository = orderRepository;
+		this.webClientBuilder = webClientBuilder;
+		this.kafkaTemplate = kafkaTemplate;
+	}
+
+	@Transactional
+    @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackPlaceOrder")
     public String placeOrder(OrderRequest orderRequest) {
         log.info("[ORDER SERVICE] Initiating transaction sequence for item SKU: {}", orderRequest.getSkuCode());
 
-        
-        // Inter-Service Communication Block: Synchronously questioning inventory status
+        // Load-Balanced Inter-Service Communication Block
         InventoryResponse inventoryResponse = webClientBuilder.build().get()
                 .uri("http://INVENTORY-SERVICE/api/inventory/" + orderRequest.getSkuCode())
                 .retrieve()
-                .bodyToMono(InventoryResponse.class) // Convert incoming JSON to clean Java DTO
-                .block(); // Forces synchronous execution (waiting for response)
+                .bodyToMono(InventoryResponse.class).block();
+               
 
-        // Logical Validation Evaluation
         if (inventoryResponse != null && inventoryResponse.isInStock() && inventoryResponse.getAvailableQuantity() >= orderRequest.getQuantity()) {
-        	
-            Order order = Order.builder()
-                    .orderNumber(UUID.randomUUID().toString())
-                    .skuCode(orderRequest.getSkuCode())
-                    .price(orderRequest.getPrice())
-                    .quantity(orderRequest.getQuantity())
-                    .build();
-         // Right inside your placeOrder() method, inside the success "if" block, add this call:
-            kafkaTemplate.send("order-topic", order.getOrderNumber());
-            log.info("[ORDER SERVICE] Asynchronous registration event stream transmitted to Kafka topic.");
+        	Order order = new Order(
+        		    null, // ID is auto-generated by MySQL
+        		    UUID.randomUUID().toString(),
+        		    orderRequest.getSkuCode(),
+        		    orderRequest.getPrice(),
+        		    orderRequest.getQuantity()
+        		);
             orderRepository.save(order);
-            log.info("[ORDER SERVICE] Transaction success! Assigned reference token: {}", order.getOrderNumber());
-            return "Order placed successfully. Reference number: " + order.getOrderNumber();
             
+            
+            
+            // Asynchronous Kafka message emission
+            kafkaTemplate.send("order-topic", order.getOrderNumber());
+            log.info("[ORDER SERVICE] Asynchronous event transmitted to Kafka.");
+            
+            return "Order placed successfully. Reference number: " + order.getOrderNumber();
         } else {
-            log.error("[ORDER SERVICE] Purchase failed. Insufficient stock capacity verified for SKU: {}", orderRequest.getSkuCode());
-            throw new OutOfStockException("Requested item stock unavailable or quantity selection exceeds warehouse availability.");
+            throw new OutOfStockException("Requested item stock unavailable.");
         }
     }
- 
+
+    // CRITICAL FALLBACK METHOD - Parameters must match placeOrder plus a RuntimeException!
+    public String fallbackPlaceOrder(OrderRequest orderRequest, RuntimeException runtimeException) {
+        log.error("[CIRCUIT BREAKER] Intercepted system failure! Inventory Service is down or timed out. Reason: {}", runtimeException.getMessage());
+        return "Our warehouse services are currently experiencing technical difficulties. "
+        		+ "Your transaction has been safely halted. Please attempt placing your order"
+        		+ " again in a few moments.";
+    }
 }

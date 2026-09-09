@@ -12,12 +12,18 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/inventory")
-@RequiredArgsConstructor
+
 public class InventoryController {
 
     private final InventoryService inventoryService;
 
-    // Endpoint for order-service to call synchronously via WebClient
+    
+    public InventoryController(InventoryService inventoryService) {
+		super();
+		this.inventoryService = inventoryService;
+	}
+
+	// Endpoint for order-service to call synchronously via WebClient
     @GetMapping("/{skuCode}")
     public ResponseEntity<InventoryResponse> checkStock(@PathVariable String skuCode) {
         return ResponseEntity.ok(inventoryService.checkStock(skuCode));

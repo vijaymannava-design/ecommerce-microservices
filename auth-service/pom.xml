@@ -99,7 +99,7 @@
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
+							<artifactId>lombok-1,18.4</artifactId>
 						</exclude>
 					</excludes>
 				</configuration>
